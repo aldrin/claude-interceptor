@@ -1,0 +1,83 @@
+* claude-interceptor
+
+Policy-gated interceptor for Claude Code. Sits between Claude Code and the tools it calls,
+evaluates every tool invocation against Rego policies, and denies the call before it executes if a
+policy rule matches. All events are recorded to JSONL for offline analysis.
+
+* Architecture
+
+Three crates:
+
+- *interceptor-core*: event schema, Rego policy engine, JSONL recorder.
+- *interceptor-hook*: Claude Code hook binary. Reads hook events from stdin, translates them to the
+  canonical schema, POSTs to the server, and outputs a JSON hook response on stdout.
+- *interceptor-server*: Axum HTTP server with a single =POST /intercept= endpoint. Optional TUI
+  mode (=--tui=) shows a live event stream with policy verdicts.
+
+* Quick start
+
+Build and start the server:
+
+#+begin_src sh
+cargo build --release
+./target/release/interceptor-server --tui
+#+end_src
+
+Add hooks to =~/.claude/settings.json=:
+
+#+begin_src json
+{
+  "hooks": {
+    "PreToolUse": [{ "matcher": "", "hooks": [{ "type": "command",
+      "command": "/path/to/interceptor-hook" }] }],
+    "PostToolUse": [{ "matcher": "", "hooks": [{ "type": "command",
+      "command": "/path/to/interceptor-hook" }] }],
+    "Stop": [{ "matcher": "", "hooks": [{ "type": "command",
+      "command": "/path/to/interceptor-hook" }] }]
+  }
+}
+#+end_src
+
+The hook fails open. If the server is unreachable, all tool calls are allowed.
+
+* Policy
+
+Policies are Rego files in =policies/=. The server loads all =.rego= files from that directory at
+startup. A dummy policy (=dummy.rego=) is included that blocks curl to raw IP addresses as a demo.
+
+An example event as seen by the policy engine:
+
+#+begin_src json
+{
+  "tool_name": "Bash",
+  "parameters": { "command": "curl http://192.168.1.1/secrets" },
+  "interception_point": "tool_call",
+  "working_directory": "/Users/you/project"
+}
+#+end_src
+
+A deny rule returns a decision object:
+
+#+begin_src rego
+decision := {"decision": "deny", "reason": "curl to IP address is not allowed"} if {
+    input.tool_name == "Bash"
+    contains(input.parameters.command, "curl")
+    regex.match(`\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`, input.parameters.command)
+}
+#+end_src
+
+Events that match no rule pass through without a decision.
+
+* Event log
+
+All events and their policy verdicts are written to =logs/YYYY-MM-DD.jsonl=, one JSON object per
+line. The log rotates daily by UTC date. Configure the log directory with =INTERCEPTOR_LOG_DIR=.
+
+* Environment variables
+
+| Variable                 | Default          | Description                     |
+|--------------------------+------------------+---------------------------------|
+| =INTERCEPTOR_ADDR=       | =127.0.0.1:4319= | Server listen address           |
+| =INTERCEPTOR_POLICY_DIR= | =policies=        | Directory containing .rego files |
+| =INTERCEPTOR_LOG_DIR=    | =logs=            | Directory for JSONL event logs   |
+| =RUST_LOG=               | =info=            | Log level filter (server only)   |

@@ -1,0 +1,20 @@
+[workspace]
+members = [
+    "interceptor-core",
+    "interceptor-server",
+    "interceptor-hook",
+]
+resolver = "2"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+axum = "0.7"
+regorus = "0.3"
+ratatui = "0.29"
+crossterm = "0.28"
+ureq = "2"
+interceptor-core = { path = "interceptor-core" }
