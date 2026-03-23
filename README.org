@@ -4,17 +4,11 @@ Policy-gated interceptor for Claude Code. Sits between Claude Code and the tools
 evaluates every tool invocation against Rego policies, and denies the call before it executes if a
 policy rule matches. All events are recorded to JSONL for offline analysis.
 
-* Architecture
+Three crates: *interceptor-core* (event schema, Rego policy engine, JSONL recorder),
+*interceptor-hook* (Claude Code hook binary), and *interceptor-server* (Axum HTTP server with
+optional TUI).
 
-Three crates:
-
-- *interceptor-core*: event schema, Rego policy engine, JSONL recorder.
-- *interceptor-hook*: Claude Code hook binary. Reads hook events from stdin, translates them to the
-  canonical schema, POSTs to the server, and outputs a JSON hook response on stdout.
-- *interceptor-server*: Axum HTTP server with a single =POST /intercept= endpoint. Optional TUI
-  mode (=--tui=) shows a live event stream with policy verdicts.
-
-* Quick start
+** Quick start
 
 Build and start the server:
 
@@ -40,7 +34,7 @@ Add hooks to =~/.claude/settings.json=:
 
 The hook fails open. If the server is unreachable, all tool calls are allowed.
 
-* Policy
+** Policy
 
 Policies are Rego files in =policies/=. The server loads all =.rego= files from that directory at
 startup. A dummy policy (=dummy.rego=) is included that blocks curl to raw IP addresses as a demo.
@@ -68,12 +62,12 @@ decision := {"decision": "deny", "reason": "curl to IP address is not allowed"} 
 
 Events that match no rule pass through without a decision.
 
-* Event log
+** Event log
 
 All events and their policy verdicts are written to =logs/YYYY-MM-DD.jsonl=, one JSON object per
 line. The log rotates daily by UTC date. Configure the log directory with =INTERCEPTOR_LOG_DIR=.
 
-* Environment variables
+** Environment variables
 
 | Variable                 | Default          | Description                     |
 |--------------------------+------------------+---------------------------------|
